@@ -11,16 +11,16 @@
     body { margin:0; padding:0; }
     #map { width:100vw; height:100vh; }
 
-    /* form popup */
+    /* popup */
     #form-popup {
       position: fixed;
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
       background: white;
-      padding: 15px;
-      border-radius: 10px;
-      box-shadow: 0 0 15px #0005;
+      padding: 10%;
+      border-radius: 20px;
+      box-shadow: 0 0 20px #0005;
       display: none;
       z-index: 9999;
       width: 250px;
@@ -29,12 +29,24 @@
 
     #form-popup input, #form-popup textarea, #form-popup button, #form-popup select {
       width: 100%;
-      margin-top: 8px;
-      padding: 6px;
+      margin-top: 10px;
+      margin-left: -10px;
+      padding: 8px;
       border-radius: 5px;
       border: 1px solid #aaa;
       font-size: 14px;
     }
+    #form-popup button {
+  width: 107%;   
+  margin-left: -10px;
+  
+}
+
+#form-popup select {
+  width: 107%;
+  margin-left: -10px;
+}
+
 
     #overlay {
       display: none;
@@ -52,27 +64,48 @@
       border: 2px solid #fff;
       box-shadow: 0 0 5px #0007;
     }
+    
   </style>
 </head>
 
 <body>
+    <div id="login-container" style="position:fixed; inset:0; background:#111; color:white;
+display:flex; flex-direction:column; justify-content:center; align-items:center;
+gap:10px; font-family:Arial; z-index:99999;">
+  
+  <h1>Login</h1>
+
+  <input id="login-user" placeholder="usuário" style="padding:8px; border-radius:5px; border:none;">
+  <input id="login-pass" type="password" placeholder="senha" style="padding:8px; border-radius:5px; border:none;">
+
+  <button id="btn-login" style="padding:8px 20px; background:#4caf50; border:none; border-radius:5px; color:white;">
+    entrar
+  </button>
+
+  <button id="btn-register" style="padding:6px 15px; background:#2196F3; border:none; border-radius:5px; color:white;">
+    criar conta
+  </button>
+
+  <p id="login-msg" style="color:red; display:none;"></p>
+</div>
+
 
 <div id="map"></div>
 
 <!-- formulário -->
 <div id="overlay"></div>
 <div id="form-popup">
-  <h3>novo pino</h3>
+  <h3>Novo pino</h3>
   <input type="text" id="pin-name" placeholder="nome">
   <textarea id="pin-desc" placeholder="descrição"></textarea>
 
   <label>cor do pino:</label>
-  <select id="pin-color">
+  <select id="pin-color";>
     <option value="red">vermelho</option>
     <option value="blue">azul</option>
     <option value="green">verde</option>
     <option value="purple">roxo</option>
-    <option value="orange">laranja</option>
+    <option value="orange">amarelo</option>
     <option value="pink">rosa</option>
   </select>
 
@@ -83,10 +116,101 @@
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 <script>
-  // JSONBIN (desligado por padrão)
+  // JSONBIN
+const API_KEY = "$2a$10$0VucZInx6G1KMn11z1JyBuvQCCHMKEGPwuGpWChE9rjno5A/mm13C";
+const BIN_USERS = "6924bc46d0ea881f40fdbc4e"; 
+
+// baixa usuários
+async function loadUsers() {
+  const res = await fetch(`https://api.jsonbin.io/v3/b/${BIN_USERS}/latest`, {
+    headers: { "X-Master-Key": API_KEY }
+  });
+
+  const data = await res.json();
+  return data.record || [];
+}
+
+// salva usuários
+async function saveUsers(users) {
+  await fetch(`https://api.jsonbin.io/v3/b/${BIN_USERS}`, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Master-Key": API_KEY
+    },
+    body: JSON.stringify(users)
+  });
+}
+
+
+async function sha256(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text);
+  const hash = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(hash))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// LOGIN
+document.getElementById("btn-login").onclick = async () => {
+  const u = document.getElementById("login-user").value;
+  const p = document.getElementById("login-pass").value;
+
+  const users = await loadUsers();
+  const passHash = await sha256(p);
+
+  const found = users.find(x => x.user === u && x.pass === passHash);
+
+  if (!found) {
+    showError("usuário ou senha errados");
+    return;
+  }
+
+  localStorage.setItem("mapa_logado", u);
+  document.getElementById("login-container").style.display = "none";
+};
+
+// REGISTRO
+document.getElementById("btn-register").onclick = async () => {
+  const u = document.getElementById("login-user").value;
+  const p = document.getElementById("login-pass").value;
+
+  if (u.length < 3) return showError("usuário muito curto");
+  if (p.length < 3) return showError("senha muito curta");
+
+  const users = await loadUsers();
+
+  if (users.some(x => x.user === u)) {
+    return showError("nome de usuário já existe");
+  }
+
+  users.push({
+    user: u,
+    pass: await sha256(p)
+  });
+
+  await saveUsers(users);
+
+  showError("conta criada! faça login", "green");
+};
+
+//erros
+function showError(msg, color="red") {
+  const el = document.getElementById("login-msg");
+  el.innerText = msg;
+  el.style.color = color;
+  el.style.display = "block";
+}
+
+// Auto login
+if (localStorage.getItem("mapa_logado")) {
+  document.getElementById("login-container").style.display = "none";
+}
+
+  // JSONBIN 
   const USE_JSONBIN = true;
   const BIN_ID = "69249fb243b1c97be9c28c1d";
-  const API_KEY = "$2a$10$0VucZInx6G1KMn11z1JyBuvQCCHMKEGPwuGpWChE9rjno5A/mm13C";
 
   let clickedLatLng = null;
   let pins = [];
@@ -97,7 +221,7 @@
     maxZoom: 19
   }).addTo(map);
 
-  // abrir formulário
+  // formulário
   map.on("click", (e) => {
     clickedLatLng = e.latlng;
     document.getElementById("overlay").style.display = "block";
@@ -119,12 +243,13 @@
     if (!name) return alert("coloca um nome");
 
     const pin = {
-      id: Date.now(),
-      lat: clickedLatLng.lat,
-      lng: clickedLatLng.lng,
-      name,
-      desc,
-      color
+    id: Date.now(),
+    lat: clickedLatLng.lat,
+    lng: clickedLatLng.lng,
+    name,
+    desc,
+    color,
+    user: localStorage.getItem("mapa_logado") || "desconhecido"
     };
 
     pins.push(pin);
@@ -152,9 +277,12 @@
   const marker = L.marker([pin.lat, pin.lng], { icon }).addTo(map);
 
   marker.bindPopup(`
-    <b>${pin.name}</b><br>${pin.desc}<br><br>
-    <button onclick="deletePin(${pin.id})">excluir</button>
-  `);
+  <b>${pin.name}</b><br>
+  ${pin.desc}<br>
+  <small>criado por: <b>${pin.user}</b></small><br><br>
+  <button onclick="deletePin(${pin.id})">excluir</button>
+`);
+
 }
   
   // deletar
@@ -191,7 +319,7 @@
 
   
 
-  // salvar JSONBin
+  // salvar JSONBIN
   async function saveJSONBin() {
   if (!USE_JSONBIN) return;
   await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
@@ -217,3 +345,4 @@ loadJSONBin().then(() => saveLocal());
 
 </body>
 </html>
+
